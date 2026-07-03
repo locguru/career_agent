@@ -1,0 +1,14 @@
+# Google OAuth & Security Tokens (DO NOT REMOVE)
+token.pickle
+credentials.json
+
+# Local Private Data Dumps
+mcp_debug_raw_emails.txt
+
+# Python environment & caching
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+.DS_Storeraw_gmail_dump.json
