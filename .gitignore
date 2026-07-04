@@ -11,4 +11,5 @@ __pycache__/
 .env
 venv/
 .venv/
-.DS_Storeraw_gmail_dump.json
+.DS_Store
+raw_gmail_dump.json

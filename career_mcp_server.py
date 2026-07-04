@@ -24,13 +24,16 @@ def fetch_recent_career_emails(lookback_months=None):
         start_date = dt.date.today() - dt.timedelta(days=days_to_subtract)
         search_query = f"after:{start_date:%Y/%m/%d}"     
 
+        # Use an environment variable for the target label, defaulting to INBOX if not set
+        target_label = os.environ.get("GMAIL_TARGET_LABEL", "INBOX")
+
         messages = []
         page_token = None
 
         while True:
             result = service.users().messages().list(
                 userId="me",
-                labelIds=["Label_17"],
+                labelIds=[target_label],
                 q=search_query,
                 pageToken=page_token,
                 maxResults=500
@@ -46,7 +49,7 @@ def fetch_recent_career_emails(lookback_months=None):
         print(f"Total messages fetched: {len(messages)}", file=sys.stderr)
 
         if not messages:
-            return "No conversation threads found inside the designated Career folder node."
+            return f"No conversation threads found inside the designated '{target_label}' label/folder node."
 
         unique_thread_ids = {msg['threadId'] for msg in messages}    
         print(f"Found {len(unique_thread_ids)} unique threads", file=sys.stderr)
@@ -87,13 +90,11 @@ def fetch_recent_career_emails(lookback_months=None):
                 if not body_content.strip():
                     body_content = msg.get('snippet', '')
 
-                # --- TOKEN DE-BLOATER CRITICAL FIXES ---
-                # 1. Strip out lines starting with '>' (traditional email thread replies)
+                # --- TOKEN DE-BLOATER FIXES ---
                 lines = body_content.splitlines()
                 clean_lines = [line for line in lines if not line.strip().startswith('>')]
                 body_content = "\n".join(clean_lines)
 
-                # 2. Cap individual message length to prevent giant legal disclaimers/boilerplate from blowing the context
                 if len(body_content) > 3000:
                     body_content = body_content[:3000] + "... [Truncated by Server]"
                 
@@ -118,7 +119,7 @@ def serve():
                     "result": {
                         "tools": [{
                             "name": "fetch_recent_career_emails",
-                            "description": "Scans custom folder Label_17 and returns recent conversational threads.",
+                            "description": "Scans the designated Gmail label and returns recent conversational threads.",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -136,7 +137,7 @@ def serve():
                 response = {
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
-                    "result": {"content": [{"type": "text", "text": data_output}]}
+                    "result": {"content": [Target := {"type": "text", "text": data_output}]}
                 }
             else:
                 response = {"jsonrpc": "2.0", "id": request.get("id"), "error": {"message": "Unknown method"}}

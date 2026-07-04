@@ -7,17 +7,24 @@ from google.genai import types
 
 
 def run_pure_mcp_agent():
-    LOOKBACK_WINDOW_MONTHS = 12
+    # Pull lookback window from environment variables, defaulting to 12 months if not specified
+    LOOKBACK_WINDOW_MONTHS = int(os.environ.get("MCP_LOOKBACK_MONTHS", 12))
+    
     # Initialize the modern native Google GenAI SDK Client
     client = genai.Client()
 
     print("🚀 Spawning local career_mcp_server.py background subprocess via Standard I/O...")
+    
+    # Forward local environment configurations (like GMAIL_TARGET_LABEL) to the subprocess
+    server_env = os.environ.copy()
+    
     server_process = subprocess.Popen(
         [sys.executable, "career_mcp_server.py"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=sys.stderr,
-        text=True
+        text=True,
+        env=server_env
     )
 
     # 1. HANDSHAKE / DISCOVERY
@@ -32,17 +39,18 @@ def run_pure_mcp_agent():
 
     # 2. PROMPT ORCHESTRATION WITH GEMINI
     system_instruction = (
-        f"You are an executive career tracking system. Summarize all the exchanges I have had with recruiters from the past {LOOKBACK_WINDOW_MONTHS} months."
+        f"You are an executive communications tracking system. Your goal is to extract and summarize professional outreach and threads from the past {LOOKBACK_WINDOW_MONTHS} months."
     )
 
     user_prompt = f"""
-    First, use the available tool to pull the raw career email threads.
+    First, use the available tool to pull the raw email conversation threads.
     Once you receive the data back from the tool, apply the following filters to the text data to create your final report:
 
     ### SEMANTIC SEARCH FILTERS (Apply AFTER fetching data)
-    Find all exchanges from the Career label with recruiters from the last {LOOKBACK_WINDOW_MONTHS} months.
-    In addition, include all email threads from the last {LOOKBACK_WINDOW_MONTHS} months with emails ending with @google.com.
-    ...
+    1. Identify all relevant professional exchanges or outreach text payload blocks from the last {LOOKBACK_WINDOW_MONTHS} months.
+    2. Group the conversations logically by external organization, company domain, or main point of contact.
+    3. Extract key data points: the latest status, actionable next steps, deadlines, and core topics discussed.
+    4. Provide a deduplicated, high-level executive summary report in markdown.
     """
 
     # Map the tool discovery parameters into Gemini structure schemas
@@ -51,7 +59,7 @@ def run_pure_mcp_agent():
             function_declarations=[
                 types.FunctionDeclaration(
                     name=tool_manifest["name"],
-                    description="REQUIRED FIRST STEP. Call this tool immediately to fetch all raw email conversation history threads for the model to analyze.",
+                    description="REQUIRED FIRST STEP. Call this tool immediately to fetch all raw conversation history threads for the model to analyze.",
                     parameters=types.Schema(
                         type="OBJECT",
                         properties={
@@ -100,7 +108,7 @@ def run_pure_mcp_agent():
         extracted_email_data = execution_payload["result"]["content"][0]["text"]
         print("📝 Email content streams pulled from server subprocess. Finalizing report...")
 
-        # 🛠️ DEBUG ADDITION: Dump raw email data to a temporary inspection file
+        # Dump raw data to a local debug file (already covered and ignored by .gitignore)
         try:
             debug_filepath = os.path.join(os.getcwd(), "mcp_debug_raw_emails.txt")
             with open(debug_filepath, "w", encoding="utf-8") as debug_file:
@@ -116,7 +124,7 @@ def run_pure_mcp_agent():
         {user_prompt}
 
         ---
-        RAW BACKEND TOOL PAYLOAD DATA FROM INBOX:
+        RAW BACKEND TOOL PAYLOAD DATA:
         {extracted_email_data}
         """
 
